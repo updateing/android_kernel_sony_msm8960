@@ -182,6 +182,8 @@ struct msm_panel_info {
 	struct lcdc_panel_info lcdc;
 	struct mipi_panel_info mipi;
 	struct lvds_panel_info lvds;
+	__u32 xres_aligned;
+	__u32 yres_aligned;
 
 	/* physical size in mm */
 	__u32 width;
@@ -215,7 +217,7 @@ struct msm_fb_panel_data {
 					u32 fps_level);
 	struct msm_panel_info *(*panel_detect) (struct msm_fb_data_type *mfd);
 	int power_on_panel_at_pan;
-	int (*update_panel) (struct platform_device *pdev);					
+	int (*update_panel) (struct platform_device *pdev);
 };
 
 /*===========================================================================
