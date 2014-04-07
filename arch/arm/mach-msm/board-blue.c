@@ -2540,6 +2540,18 @@ extern struct as3676_platform_data as3676_platform_data;
 #ifdef CONFIG_TOUCHSCREEN_CLEARPAD
 static struct regulator *vreg_touch_vdd;
 
+struct synaptics_button_data synaptics_back_key = {
+        .code = KEY_BACK,
+};
+
+struct synaptics_button_data synaptics_home_key = {
+        .code = KEY_HOMEPAGE,
+};
+
+struct synaptics_button_data synaptics_menu_key = {
+        .code = KEY_MENU,
+};
+
 struct synaptics_pointer_data pointer_data_0x19 = {
 	.offset_x = 0,
 	.offset_y = 49,
@@ -2549,7 +2561,6 @@ struct synaptics_pointer_data pointer_data_0x1A = {
 	.offset_x = 0,
 	.offset_y = 55,
 };
-
 
 struct synaptics_funcarea clearpad_funcarea_array[] = {
 	{
@@ -2561,8 +2572,20 @@ struct synaptics_funcarea clearpad_funcarea_array[] = {
 
 struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
 	{
-		{ 0, 0, 719, 36 }, { 0, 0, 719, 36 },
+		{ 0, 0, 149, 36 }, { 0, 0, 149, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_back_key
+	},
+	/* {
+		{ 249, 0, 469, 36 }, { 239, 0, 479, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_home_key
+	}, */
+	{
+		{ 149, 0, 639, 36 }, { 149, 0, 669, 36 },
 		SYN_FUNCAREA_INSENSIBLE, NULL
+	},
+	{
+		{ 669, 0, 719, 36 }, { 669, 0, 719, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_menu_key
 	},
 	{
 		{ 0, 49, 719, 1328 }, { 0, 37, 719, 1332 },
