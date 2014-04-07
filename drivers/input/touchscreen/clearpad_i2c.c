@@ -70,10 +70,13 @@ static int clearpad_i2c_set_page(struct device *dev, unsigned int page)
 	if (rc != sizeof(txbuf)) {
 		dev_err(dev,
 			"%s: set page failed: %d.", __func__, rc);
-		return (rc < 0) ? rc : -EIO;
+		rc = (rc < 0) ? rc : -EIO;
+		goto exit;
 	}
 	this->page = page;
-	return 0;
+	rc = 0;
+exit:
+	return rc;
 }
 
 static int clearpad_i2c_read_block(struct device *dev, u16 addr, u8 *buf,
@@ -150,8 +153,10 @@ static int __devinit clearpad_i2c_probe(struct i2c_client *client,
 	int rc;
 
 	this = kzalloc(sizeof(struct clearpad_i2c), GFP_KERNEL);
-	if (!this)
-		return -ENOMEM;
+	if (!this) {
+		rc = -ENOMEM;
+		goto exit;
+	}
 
 	dev_set_drvdata(&client->dev, this);
 
@@ -175,17 +180,19 @@ static int __devinit clearpad_i2c_probe(struct i2c_client *client,
 
 	if (!this->pdev->dev.driver) {
 		rc = -ENODEV;
-		platform_device_unregister(this->pdev);
-		goto err_free;
+		goto err_device_del;
 	}
 	dev_info(&client->dev, "%s: sucess\n", __func__);
-	return 0;
+	goto exit;
 
+err_device_del:
+	platform_device_del(this->pdev);
 err_device_put:
 	platform_device_put(this->pdev);
 err_free:
 	dev_set_drvdata(&client->dev, NULL);
 	kfree(this);
+exit:
 	return rc;
 }
 

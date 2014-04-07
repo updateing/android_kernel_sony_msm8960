@@ -2538,7 +2538,150 @@ extern struct as3676_platform_data as3676_platform_data;
 #define SYNAPTICS_TOUCH_GPIO_IRQ 11
 
 #ifdef CONFIG_TOUCHSCREEN_CLEARPAD
+#define CLEARPAD_VDD "touch_vdd"
+#define CLEARPAD_VIO "touch_vio"
 static struct regulator *vreg_touch_vdd;
+static struct regulator *vreg_touch_vio;
+
+static int regulator_enable_handler(struct regulator *regulator,
+				struct device *dev,
+				const char *func_str,
+				const char *reg_str)
+{
+	int rc, enabled;
+
+	if (IS_ERR_OR_NULL(regulator)) {
+		rc = regulator ? PTR_ERR(regulator) : -EINVAL;
+		if (dev != NULL)
+			dev_err(dev,
+				"%s: regulator '%s' invalid",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		else
+			pr_err("%s: regulator '%s' invalid",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		return rc;
+	}
+
+	rc = regulator_enable(regulator);
+	if (!rc)
+		return rc;
+
+	enabled = regulator_is_enabled(regulator);
+	if (enabled > 0) {
+		if (dev != NULL)
+			dev_warn(dev,
+				"%s: regulator '%s' already enabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		else
+			pr_warning(
+				"%s: regulator '%s' already enabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		rc = 0;
+	} else if (enabled == 0) {
+		if (dev != NULL)
+			dev_err(dev,
+				"%s: regulator '%s' still disabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		else
+			pr_err("%s: regulator '%s' still disabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+	} else {
+		if (dev != NULL)
+			dev_err(dev,
+				"%s: regulator '%s' status error %d",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?",
+				enabled);
+		else
+			pr_err("%s: regulator '%s' status error %d",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?",
+				enabled);
+	}
+	return rc;
+}
+
+static int regulator_disable_handler(struct regulator *regulator,
+				struct device *dev,
+				const char *func_str,
+				const char *reg_str)
+{
+	int rc, enabled;
+
+	if (IS_ERR_OR_NULL(regulator)) {
+		rc = regulator ? PTR_ERR(regulator) : -EINVAL;
+		if (dev != NULL)
+			dev_err(dev,
+				"%s: regulator '%s' invalid",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		else
+			pr_err("%s: regulator '%s' invalid",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		return rc;
+	}
+
+	rc = regulator_disable(regulator);
+	if (!rc)
+		return rc;
+
+	enabled = regulator_is_enabled(regulator);
+	if (enabled == 0) {
+		if (dev != NULL)
+			dev_warn(dev,
+				"%s: regulator '%s' already disabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		else
+			pr_warning(
+				"%s: regulator '%s' already disabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		rc = 0;
+	} else if (enabled > 0) {
+		if (dev != NULL)
+			dev_err(dev,
+				"%s: regulator '%s' still enabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+		else
+			pr_err("%s: regulator '%s' still enabled",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?");
+	} else {
+		if (dev != NULL)
+			dev_err(dev,
+				"%s: regulator '%s' status error %d",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?",
+				enabled);
+		else
+			pr_err("%s: regulator '%s' status error %d",
+				func_str ? func_str : "?",
+				reg_str ? reg_str : "?",
+				enabled);
+	}
+	return rc;
+}
+
+struct synaptics_button_data synaptics_back_key = {
+        .code = KEY_BACK,
+};
+
+struct synaptics_button_data synaptics_home_key = {
+        .code = KEY_HOMEPAGE,
+};
+
+struct synaptics_button_data synaptics_menu_key = {
+        .code = KEY_MENU,
+};
 
 struct synaptics_pointer_data pointer_data_0x19 = {
 	.offset_x = 0,
@@ -2550,7 +2693,6 @@ struct synaptics_pointer_data pointer_data_0x1A = {
 	.offset_y = 55,
 };
 
-
 struct synaptics_funcarea clearpad_funcarea_array[] = {
 	{
 		{ 0, 0, 719, 1279 }, { 0, 0, 719, 1279 },
@@ -2561,8 +2703,20 @@ struct synaptics_funcarea clearpad_funcarea_array[] = {
 
 struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
 	{
-		{ 0, 0, 719, 36 }, { 0, 0, 719, 36 },
+		{ 0, 0, 149, 36 }, { 0, 0, 149, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_back_key
+	},
+	/* {
+		{ 249, 0, 469, 36 }, { 239, 0, 479, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_home_key
+	}, */
+	{
+		{ 149, 0, 639, 36 }, { 149, 0, 669, 36 },
 		SYN_FUNCAREA_INSENSIBLE, NULL
+	},
+	{
+		{ 669, 0, 719, 36 }, { 669, 0, 719, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_menu_key
 	},
 	{
 		{ 0, 49, 719, 1328 }, { 0, 37, 719, 1332 },
@@ -2629,59 +2783,83 @@ static int clearpad_vreg_low_power_mode(int enable)
 	}
 }
 
-static int clearpad_vreg_configure(int enable)
+static int clearpad_vreg_configure(struct device *dev, int enable)
 {
 	int rc = 0;
 
-	vreg_touch_vdd = regulator_get(NULL, "8921_l17");
-	if (IS_ERR(vreg_touch_vdd)) {
-		pr_err("%s: get vdd failed\n", __func__);
-		return -ENODEV;
-	}
-
 	if (enable) {
+		vreg_touch_vdd = regulator_get(dev, CLEARPAD_VDD);
+		if (IS_ERR(vreg_touch_vdd)) {
+			dev_err(dev, "%s: get vdd failed\n", __func__);
+			return -ENODEV;
+		}
 		rc = regulator_set_voltage(vreg_touch_vdd, 3000000, 3000000);
 		if (rc) {
-			pr_err("%s: set voltage failed, rc=%d\n", __func__, rc);
-			goto clearpad_vreg_configure_err;
+			dev_err(dev, "%s: set voltage vdd failed, rc=%d\n",
+								__func__, rc);
+			goto clearpad_vdd_configure_err;
 		}
-		rc = regulator_enable(vreg_touch_vdd);
-		if (rc) {
-			pr_err("%s: enable vdd failed, rc=%d\n", __func__, rc);
-			goto clearpad_vreg_configure_err;
-		}
+		rc = regulator_enable_handler(vreg_touch_vdd, dev,
+							__func__, CLEARPAD_VDD);
+		if (rc)
+			goto clearpad_vdd_configure_err;
 		rc = clearpad_vreg_low_power_mode(0);
 		if (rc) {
-			pr_err("%s: set vdd mode failed, rc=%d\n",
+			dev_err(dev, "%s: set vdd mode failed, rc=%d\n",
 				__func__, rc);
-			goto clearpad_vreg_configure_err;
+			goto clearpad_vdd_disable;
+		}
+		vreg_touch_vio = regulator_get(dev, CLEARPAD_VIO);
+		if (!IS_ERR(vreg_touch_vio)) {
+			rc = regulator_set_voltage(vreg_touch_vio,
+							1800000, 1800000);
+			if (rc) {
+				dev_err(dev, "%s: set voltage vio failed, "
+						"rc=%d\n", __func__, rc);
+				goto clearpad_vio_configure_err;
+			}
+			rc = regulator_enable_handler(vreg_touch_vio, dev,
+						__func__, CLEARPAD_VIO);
+			if (rc)
+				goto clearpad_vio_configure_err;
 		}
 	} else {
-		rc = regulator_set_voltage(vreg_touch_vdd, 0, 3000000);
-		if (rc) {
-			pr_err("%s: set voltage failed, rc=%d\n", __func__, rc);
-			goto clearpad_vreg_configure_err;
+		if (!IS_ERR(vreg_touch_vio)) {
+			rc = regulator_set_voltage(vreg_touch_vio, 0, 1800000);
+			if (rc)
+				dev_err(dev, "%s: set voltage vio failed, "
+						"rc=%d\n", __func__, rc);
+			regulator_disable_handler(vreg_touch_vio, dev,
+						__func__, CLEARPAD_VIO);
+			regulator_put(vreg_touch_vio);
 		}
-		rc = regulator_disable(vreg_touch_vdd);
+		rc = regulator_set_voltage(vreg_touch_vdd, 0, 3000000);
 		if (rc)
-			pr_err("%s: disable vdd failed, rc=%d\n",
-								__func__, rc);
+			dev_err(dev, "%s: set voltage vdd failed, rc=%d\n",
+							__func__, rc);
+		regulator_disable_handler(vreg_touch_vdd, dev,
+						__func__, CLEARPAD_VDD);
+		regulator_put(vreg_touch_vdd);
 	}
 	return rc;
-clearpad_vreg_configure_err:
+clearpad_vio_configure_err:
+	regulator_put(vreg_touch_vio);
+clearpad_vdd_disable:
+	regulator_disable_handler(vreg_touch_vdd, dev, __func__, CLEARPAD_VDD);
+clearpad_vdd_configure_err:
 	regulator_put(vreg_touch_vdd);
 	return rc;
 }
 
-static int clearpad_vreg_reset(void)
+static int clearpad_vreg_reset(struct device *dev)
 {
 	int rc = 0;
 
-	rc = clearpad_vreg_configure(0);
+	rc = clearpad_vreg_configure(dev, 0);
 	if (rc)
 		return rc;
-	usleep(20000);
-	rc = clearpad_vreg_configure(1);
+	usleep_range(10000, 11000);
+	rc = clearpad_vreg_configure(dev, 1);
 	return rc;
 }
 
@@ -2727,14 +2905,36 @@ static int clearpad_gpio_export(struct device *dev, bool export)
 	return rc;
 }
 
+int clearpad_flip_config_get(u8 module_id, u8 rev)
+{
+		return SYN_FLIP_NONE;
+}
+
+struct evgen_block *clearpad_evgen_block_get(u8 module_id, u8 rev)
+{
+	return NULL;
+}
+
+struct synaptics_easy_wakeup_config clearpad_easy_wakeup_config = {
+	.gesture_enable = false,
+	.large_panel = false,
+};
+
 static struct clearpad_platform_data clearpad_platform_data = {
 	.irq = MSM_GPIO_TO_INT(SYNAPTICS_TOUCH_GPIO_IRQ),
+	.symlink_name = "clearpad",
 	.funcarea_get = clearpad_funcarea_get,
+	// .evgen_block_get = clearpad_evgen_block_get,
+	.evgen_block_get = NULL, //To make the default predef_evgen_block work
 	.vreg_configure = clearpad_vreg_configure,
 	.vreg_suspend = clearpad_vreg_low_power_mode,
 	.vreg_reset = clearpad_vreg_reset,
 	.gpio_configure = clearpad_gpio_configure,
 	.gpio_export = clearpad_gpio_export,
+	.flip_config_get = clearpad_flip_config_get,
+	.watchdog_enable = true,
+	.watchdog_poll_t_ms = 1000,
+	.easy_wakeup_config = &clearpad_easy_wakeup_config,
 };
 #endif
 

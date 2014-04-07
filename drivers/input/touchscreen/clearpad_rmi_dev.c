@@ -98,7 +98,8 @@ static loff_t rmidev_llseek(struct file *filp, loff_t off, int whence)
 
 	if (IS_ERR(data)) {
 		pr_err("%s: pointer of char device is invalid", __func__);
-		return -EBADF;
+		newpos = -EBADF;
+		goto exit;
 	}
 
 	mutex_lock(&(data->file_mutex));
@@ -132,6 +133,7 @@ static loff_t rmidev_llseek(struct file *filp, loff_t off, int whence)
 
 clean_up:
 	mutex_unlock(&(data->file_mutex));
+exit:
 	return newpos;
 }
 
@@ -152,18 +154,26 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 {
 	struct rmidev_data *data = filp->private_data;
 	ssize_t retval  = 0;
-	unsigned char tmpbuf[count+1];
+	unsigned char tmpbuf[RMI_CHAR_DEV_TMPBUF_SZ];
+
+	if (*f_pos > REG_ADDR_LIMIT) {
+		retval = -EINVAL;
+		goto exit;
+	}
 
 	/* limit offset to REG_ADDR_LIMIT-1 */
 	if (count > (REG_ADDR_LIMIT - *f_pos))
 		count = REG_ADDR_LIMIT - *f_pos;
+	if (count > RMI_CHAR_DEV_TMPBUF_SZ)
+		count = RMI_CHAR_DEV_TMPBUF_SZ;
 
 	if (count == 0)
-		return 0;
+		goto exit;
 
 	if (IS_ERR(data)) {
 		pr_err("%s: pointer of char device is invalid", __func__);
-		return -EBADF;
+		retval = -EBADF;
+		goto exit;
 	}
 
 	mutex_lock(&(data->file_mutex));
@@ -181,7 +191,7 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 clean_up:
 
 	mutex_unlock(&(data->file_mutex));
-
+exit:
 	return retval;
 }
 
@@ -201,22 +211,32 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 {
 	struct rmidev_data *data = filp->private_data;
 	ssize_t retval  = 0;
-	unsigned char tmpbuf[count+1];
+	unsigned char tmpbuf[RMI_CHAR_DEV_TMPBUF_SZ];
+
+	if (*f_pos > REG_ADDR_LIMIT) {
+		retval = -EINVAL;
+		goto exit;
+	}
 
 	/* limit offset to REG_ADDR_LIMIT-1 */
 	if (count > (REG_ADDR_LIMIT - *f_pos))
 		count = REG_ADDR_LIMIT - *f_pos;
+	if (count > RMI_CHAR_DEV_TMPBUF_SZ)
+		count = RMI_CHAR_DEV_TMPBUF_SZ;
 
 	if (count == 0)
-		return 0;
+		goto exit;
 
 	if (IS_ERR(data)) {
 		pr_err("%s: pointer of char device is invalid", __func__);
-		return -EBADF;
+		retval = -EBADF;
+		goto exit;
 	}
 
-	if (copy_from_user(tmpbuf, buf, count))
-		return -EFAULT;
+	if (copy_from_user(tmpbuf, buf, count)) {
+		retval = -EFAULT;
+		goto exit;
+	}
 
 	mutex_lock(&(data->file_mutex));
 
@@ -226,7 +246,7 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 		*f_pos += count;
 
 	mutex_unlock(&(data->file_mutex));
-
+exit:
 	return retval;
 }
 
@@ -245,8 +265,10 @@ static int rmidev_open(struct inode *inp, struct file *filp)
 
 	filp->private_data = data;
 
-	if (!data->pdata)
-		return -EACCES;
+	if (!data->pdata) {
+		retval = -EACCES;
+		goto exit;
+	}
 
 	mutex_lock(&(data->file_mutex));
 	if (data->ref_count < 1)
@@ -255,7 +277,7 @@ static int rmidev_open(struct inode *inp, struct file *filp)
 		retval = -EACCES;
 
 	mutex_unlock(&(data->file_mutex));
-
+exit:
 	return retval;
 }
 
@@ -270,9 +292,12 @@ static int rmidev_release(struct inode *inp, struct file *filp)
 {
 	struct rmidev_data *data = container_of(inp->i_cdev,
 			struct rmidev_data, main_dev);
+	int retval = 0;
 
-	if (!data->pdev)
-		return -EACCES;
+	if (!data->pdev) {
+		retval = -EACCES;
+		goto exit;
+	}
 
 	mutex_lock(&(data->file_mutex));
 
@@ -281,8 +306,8 @@ static int rmidev_release(struct inode *inp, struct file *filp)
 		data->ref_count = 0;
 
 	mutex_unlock(&(data->file_mutex));
-
-	return 0;
+exit:
+	return retval;
 }
 
 static const struct file_operations rmidev_fops = {
@@ -327,12 +352,14 @@ static void rmidev_device_cleanup(struct rmidev_data *data)
  */
 static char *rmi_char_devnode(struct device *dev, mode_t *mode)
 {
-	if (!mode)
-		return NULL;
-	/**mode = 0600*/
-	*mode = S_IRUSR|S_IWUSR;
+	char *pret = NULL;
 
-	return kasprintf(GFP_KERNEL, "rmi/%s", dev_name(dev));
+	if (mode) {
+		/**mode = 0600*/
+		*mode = S_IRUSR|S_IWUSR;
+		pret = kasprintf(GFP_KERNEL, "rmi/%s", dev_name(dev));
+	}
+	return pret;
 }
 
 static int rmidev_init_device(struct rmidev_data *data)
@@ -355,7 +382,7 @@ static int rmidev_init_device(struct rmidev_data *data)
 		dev_err(&data->pdev->dev,
 			"Failed to register or allocate char dev, code %d.\n",
 				retval);
-		return retval;
+		goto exit;
 	} else {
 		dev_info(&data->pdev->dev, "Allocated rmidev %d %d.\n",
 			 MAJOR(dev_no), MINOR(dev_no));
@@ -370,7 +397,7 @@ static int rmidev_init_device(struct rmidev_data *data)
 		dev_err(&data->pdev->dev, "Error %d adding rmi_char_dev.\n",
 			retval);
 		rmidev_device_cleanup(data);
-		return retval;
+		goto exit;
 	}
 
 	dev_set_name(&data->pdev->dev, "rmidev%d", MINOR(dev_no));
@@ -385,10 +412,10 @@ static int rmidev_init_device(struct rmidev_data *data)
 		dev_err(&data->pdev->dev,
 			"Failed to create rmi device.\n");
 		rmidev_device_cleanup(data);
-		return -ENODEV;
+		retval = -ENODEV;
 	}
-
-	return 0;
+exit:
+	return retval;
 }
 
 static int __devinit rmi_dev_probe(struct platform_device *pdev)
@@ -399,8 +426,10 @@ static int __devinit rmi_dev_probe(struct platform_device *pdev)
 	int retval = 0;
 
 	data = kzalloc(sizeof(struct rmidev_data), GFP_KERNEL);
-	if (!data)
-		return -ENOMEM;
+	if (!data) {
+		retval = -ENOMEM;
+		goto exit;
+	}
 
 	dev_set_drvdata(&pdev->dev, data);
 	data->pdev = pdev;
@@ -418,14 +447,13 @@ static int __devinit rmi_dev_probe(struct platform_device *pdev)
 	}
 
 	retval = rmidev_init_device(data);
-	if (retval)
-		goto err_free;
-
-	return 0;
+	if (!retval)
+		goto exit;
 
 err_free:
 	dev_set_drvdata(&pdev->dev, NULL);
 	kfree(data);
+exit:
 	return retval;
 }
 
@@ -448,6 +476,7 @@ static struct platform_driver rmidev_driver = {
 
 static int __init rmidev_init(void)
 {
+	int retval = 0;
 
 	pr_debug("%s: rmi_dev initialization.\n", __func__);
 
@@ -457,12 +486,15 @@ static int __init rmidev_init(void)
 	if (IS_ERR(rmidev_device_class)) {
 		pr_err("%s: ERROR - Failed to create /dev/%s.\n", __func__,
 			CHAR_DEVICE_NAME);
-		return -ENODEV;
+		retval = -ENODEV;
+		goto exit;
 	}
 	/* setup permission */
 	rmidev_device_class->devnode = rmi_char_devnode;
 
-	return platform_driver_register(&rmidev_driver);
+	retval = platform_driver_register(&rmidev_driver);
+exit:
+	return retval;
 }
 
 static void __exit rmidev_exit(void)
