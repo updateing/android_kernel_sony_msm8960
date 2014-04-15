@@ -2572,19 +2572,19 @@ struct synaptics_funcarea clearpad_funcarea_array[] = {
 
 struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
 	{
-		{ 0, 0, 149, 36 }, { 0, 0, 149, 36 },
+		{ 0, 0, 74, 36 }, { 0, 0, 74, 36 },
 		SYN_FUNCAREA_BUTTON, &synaptics_back_key
 	},
-	/* {
-		{ 249, 0, 469, 36 }, { 239, 0, 479, 36 },
-		SYN_FUNCAREA_BUTTON, &synaptics_home_key
-	}, */
 	{
-		{ 149, 0, 639, 36 }, { 149, 0, 669, 36 },
+		{ 149, 0, 149, 36 }, { 149, 0, 149, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_home_key
+	},
+	{
+		{ 149, 0, 659, 36 }, { 149, 0, 659, 36 },
 		SYN_FUNCAREA_INSENSIBLE, NULL
 	},
 	{
-		{ 669, 0, 719, 36 }, { 669, 0, 719, 36 },
+		{ 659, 0, 719, 36 }, { 659, 0, 719, 36 },
 		SYN_FUNCAREA_BUTTON, &synaptics_menu_key
 	},
 	{
