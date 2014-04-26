@@ -2570,7 +2570,23 @@ struct synaptics_funcarea clearpad_funcarea_array[] = {
 	{ .func = SYN_FUNCAREA_END }
 };
 
-struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
+struct synaptics_funcarea clearpad_funcarea_array_0x19_with_menu_key[] = {
+	{
+		{ 0, 0, 659, 36 }, { 0, 0, 659, 36 },
+		SYN_FUNCAREA_INSENSIBLE, NULL
+	},
+	{
+		{ 659, 0, 719, 36 }, { 659, 0, 719, 36 },
+		SYN_FUNCAREA_BUTTON, &synaptics_menu_key
+	},
+	{
+		{ 0, 49, 719, 1328 }, { 0, 37, 719, 1332 },
+		SYN_FUNCAREA_POINTER, &pointer_data_0x19
+	},
+	{ .func = SYN_FUNCAREA_END }
+};
+
+struct synaptics_funcarea clearpad_funcarea_array_0x19_with_all_keys[] = {
 	{
 		{ 0, 0, 99, 36 }, { 0, 0, 99, 36 },
 		SYN_FUNCAREA_BUTTON, &synaptics_back_key
@@ -2586,6 +2602,18 @@ struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
 	{
 		{ 659, 0, 719, 36 }, { 659, 0, 719, 36 },
 		SYN_FUNCAREA_BUTTON, &synaptics_menu_key
+	},
+	{
+		{ 0, 49, 719, 1328 }, { 0, 37, 719, 1332 },
+		SYN_FUNCAREA_POINTER, &pointer_data_0x19
+	},
+	{ .func = SYN_FUNCAREA_END }
+};
+
+struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
+	{
+		{ 0, 0, 719, 36 }, { 0, 0, 719, 36 },
+		SYN_FUNCAREA_INSENSIBLE, NULL
 	},
 	{
 		{ 0, 49, 719, 1328 }, { 0, 37, 719, 1332 },
@@ -2612,6 +2640,12 @@ struct synaptics_funcarea *clearpad_funcarea_get(u8 module_id, u8 rev)
 
 	pr_info("%s: module_id=0x%02x rev=0x%02x\n", __func__, module_id, rev);
 	switch (module_id) {
+	case 0x17:
+		funcarea = clearpad_funcarea_array_0x19_with_menu_key;
+		break;
+	case 0x18:
+		funcarea = clearpad_funcarea_array_0x19_with_all_keys;
+		break;
 	case 0x19:
 		funcarea = clearpad_funcarea_array_0x19;
 		break;

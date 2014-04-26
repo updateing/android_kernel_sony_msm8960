@@ -2113,6 +2113,122 @@ end:
 	UNLOCK(this);
 	return strnlen(buf, PAGE_SIZE);
 }
+
+static ssize_t synaptics_clearpad_keys_enabled_show(struct device *dev,
+					      struct device_attribute *attr,
+					      char *buf)
+{
+	struct synaptics_clearpad *this = dev_get_drvdata(dev);
+	struct synaptics_funcarea *funcarea = this->funcarea;
+	int keys_num = 0;
+
+	for (; funcarea->func != SYN_FUNCAREA_END; funcarea++)
+		if (funcarea->func == SYN_FUNCAREA_BUTTON)
+			keys_num++;
+
+	switch(keys_num){
+		case 0:
+			snprintf(buf, PAGE_SIZE, "0\n0=No keys\n1=Menu key\n2=Back,Home,Menu keys\n");
+			break;
+		case 1:
+			snprintf(buf, PAGE_SIZE, "1\n0=No keys\n1=Menu key\n2=Back,Home,Menu keys\n");
+			break;
+		default:
+			snprintf(buf, PAGE_SIZE, "2\n0=No keys\n1=Menu key\n2=Back,Home,Menu keys\n");
+	}
+
+	return strnlen(buf, PAGE_SIZE);
+}
+
+static ssize_t synaptics_clearpad_keys_enabled_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t size)
+{
+	struct synaptics_clearpad *this = dev_get_drvdata(dev);
+	struct synaptics_funcarea *funcarea;
+	struct synaptics_area pointer_area;
+	struct synaptics_button_data *button;
+	struct synaptics_pointer_data *pointer_data;
+	const char *func_name[] = {
+		[SYN_FUNCAREA_INSENSIBLE] = "insensible",
+		[SYN_FUNCAREA_POINTER] = "pointer",
+		[SYN_FUNCAREA_BUTTON] = "button",
+	};
+	int i, keys_mode = 0, fake_cust = 0x19;
+
+	i = sscanf(buf, "%1d", &keys_mode);
+	if (i != 1)
+		return -EINVAL;
+
+	switch(keys_mode){
+		case 0:
+			fake_cust = 0x19;
+			break;
+		case 1:
+			fake_cust = 0x17;
+			break;
+		case 2:
+			fake_cust = 0x18;
+	}
+
+	this->funcarea = this->pdata->funcarea_get(
+				fake_cust,
+				this->device_info.firmware_revision);
+	funcarea = this->funcarea;
+
+	if (funcarea == NULL) {
+		dev_info(&this->pdev->dev, "no funcarea\n");
+		return -EINVAL;
+	}
+
+	for (; funcarea->func != SYN_FUNCAREA_END; funcarea++) {
+		switch (funcarea->func) {
+		case SYN_FUNCAREA_POINTER:
+			pointer_area = (struct synaptics_area)
+							funcarea->original;
+			pointer_data = (struct synaptics_pointer_data *)
+							funcarea->data;
+			if (pointer_data) {
+				pointer_area.x1 -= pointer_data->offset_x;
+				pointer_area.x2 -= pointer_data->offset_x;
+				pointer_area.y1 -= pointer_data->offset_y;
+				pointer_area.y2 -= pointer_data->offset_y;
+			}
+			input_mt_init_slots(this->input,
+						SYNAPTICS_MAX_N_FINGERS);
+			input_set_abs_params(this->input, ABS_MT_POSITION_X,
+					     pointer_area.x1,
+					     pointer_area.x2, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_POSITION_Y,
+					     pointer_area.y1,
+					     pointer_area.y2, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_PRESSURE,
+					0, SYNAPTICS_MAX_Z_VALUE, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_TOUCH_MAJOR,
+					0, SYNAPTICS_MAX_W_VALUE + 1, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_TOUCH_MINOR,
+					0, SYNAPTICS_MAX_W_VALUE + 1, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_ORIENTATION,
+					-1, 1, 0, 0);
+			break;
+		case SYN_FUNCAREA_BUTTON:
+			button = (struct synaptics_button_data *)funcarea->data;
+			input_set_capability(this->input, EV_KEY, button->code);
+			break;
+		default:
+			continue;
+		}
+
+		dev_info(&this->pdev->dev,
+			 "funcarea '%s' [%d, %d, %d, %d] [%d, %d, %d, %d]\n",
+			 func_name[funcarea->func],
+			 funcarea->original.x1, funcarea->original.y1,
+			 funcarea->original.x2, funcarea->original.y2,
+			 funcarea->extension.x1, funcarea->extension.y1,
+			 funcarea->extension.x2, funcarea->extension.y2);
+	}
+	return strnlen(buf, PAGE_SIZE);
+}
 static DEVICE_ATTR(fwinfo, 0600, synaptics_clearpad_state_show, 0);
 static DEVICE_ATTR(fwfamily, 0600, synaptics_clearpad_state_show, 0);
 static DEVICE_ATTR(fwrevision, 0604, synaptics_clearpad_state_show, 0);
@@ -2121,6 +2237,7 @@ static DEVICE_ATTR(fwstate, 0600, synaptics_clearpad_state_show, 0);
 static DEVICE_ATTR(fwflush, 0600, 0, synaptics_clearpad_fwflush_store);
 static DEVICE_ATTR(touchcmd, 0600, 0, synaptics_clearpad_touchcmd_store);
 static DEVICE_ATTR(enabled, 0600, 0, synaptics_clearpad_enabled_store);
+static DEVICE_ATTR(keys_enabled, 0644, synaptics_clearpad_keys_enabled_show, synaptics_clearpad_keys_enabled_store);
 
 static struct attribute *synaptics_clearpad_attributes[] = {
 	&dev_attr_fwinfo.attr,
@@ -2131,6 +2248,7 @@ static struct attribute *synaptics_clearpad_attributes[] = {
 	&dev_attr_fwflush.attr,
 	&dev_attr_touchcmd.attr,
 	&dev_attr_enabled.attr,
+	&dev_attr_keys_enabled.attr,
 	NULL
 };
 
