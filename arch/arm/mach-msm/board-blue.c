@@ -174,6 +174,10 @@
 #define NXP_GPIO_NFC_IRQ	106
 #endif
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+#include <linux/memblock.h>
+#endif
+
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
@@ -1158,11 +1162,26 @@ early_param("ext_display", ext_display_setup);
 
 static void __init msm8960_reserve(void)
 {
+#ifdef CONFIG_KEXEC_HARDBOOT
+	struct membank* bank;
+	phys_addr_t start;
+	int ret;
+#endif
 #if defined(CONFIG_ANDROID_RAM_CONSOLE) || defined(CONFIG_RAMDUMP_TAGS) || \
 	defined(CONFIG_RAMDUMP_CRASH_LOGS)
 	reserve_debug_memory();
 #endif
 	msm8960_set_display_params(prim_panel_name, ext_panel_name);
+#ifdef CONFIG_KEXEC_HARDBOOT
+	// Reserve space for hardboot page, just before the ram_console
+	bank = &meminfo.bank[0];
+	start = KEXEC_HB_PAGE_ADDR;
+	ret = memblock_remove(start, SZ_1M);
+	if(!ret)
+		pr_info("Hardboot page reserved at 0x%X\n", start);
+	else
+		pr_err("Failed to reserve space for hardboot page at 0x%X!\n", start);
+#endif
 	msm_reserve();
 }
 
