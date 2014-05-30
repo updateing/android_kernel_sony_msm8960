@@ -598,6 +598,13 @@ static bool __ref msm_pm_spm_power_collapse(
 	return collapsed;
 }
 
+static unsigned long acpuclk_power_collapse_standalone(void)
+{
+	unsigned long rate = acpuclk_get_rate(smp_processor_id());
+	acpuclk_set_rate(smp_processor_id(), 384000, SETRATE_PC);
+	return rate;
+}
+
 static bool msm_pm_power_collapse_standalone(bool from_idle)
 {
 	unsigned int cpu = smp_processor_id();

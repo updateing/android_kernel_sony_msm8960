@@ -119,6 +119,8 @@ static void set_cpu_work(struct work_struct *work)
 	complete(&cpu_work->complete);
 }
 
+unsigned int smooth_level = 99;
+
 static int msm_cpufreq_target(struct cpufreq_policy *policy,
 				unsigned int target_freq,
 				unsigned int relation)
@@ -129,6 +131,7 @@ static int msm_cpufreq_target(struct cpufreq_policy *policy,
 
 	struct cpufreq_work_struct *cpu_work = NULL;
 	cpumask_var_t mask;
+	int i, old_index = INT_MAX;
 
 	if (!cpu_active(policy->cpu)) {
 		pr_info("cpufreq: cpu %d is not active.\n", policy->cpu);
@@ -158,6 +161,25 @@ static int msm_cpufreq_target(struct cpufreq_policy *policy,
 	pr_debug("CPU[%d] target %d relation %d (%d-%d) selected %d\n",
 		policy->cpu, target_freq, relation,
 		policy->min, policy->max, table[index].frequency);
+
+	//from galaxy s2...
+	if(smooth_level < 12)
+	{
+		for (i = 0; table[i].frequency != CPUFREQ_TABLE_END; i++) {
+			if (table[i].frequency == policy->cur)
+				old_index = table[i].index;
+		}
+		if (old_index != INT_MAX) {
+			//pr_debug("old_index: %d index: %d smooth_level: %d\n", old_index, index, smooth_level);
+			/* Do NOT step up max arm clock directly to reduce power consumption */
+			if (index > smooth_level && old_index < smooth_level)
+			{
+				index = smooth_level;
+				//pr_debug("Smooth level is set to %d\n", smooth_level);
+			}
+		}
+		//else pr_debug("old index not found\n");
+	}
 
 	cpu_work = &per_cpu(cpufreq_work, policy->cpu);
 	cpu_work->policy = policy;
@@ -319,6 +341,46 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	return 0;
 }
 
+
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+extern bool lmf_screen_state;
+#endif
+
+static void msm_cpu_early_suspend(struct early_suspend *h)
+{
+#ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
+	int cpu = 0;
+
+	for_each_possible_cpu(cpu) {
+		mutex_lock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
+lmf_screen_state = false;
+		mutex_unlock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
+	}
+#endif
+
+}
+
+static void msm_cpu_late_resume(struct early_suspend *h)
+{
+#ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
+	int cpu = 0;
+
+	for_each_possible_cpu(cpu) {
+
+		mutex_lock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
+lmf_screen_state = true;
+		mutex_unlock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
+	}
+#endif
+
+}
+
+static struct early_suspend msm_cpu_early_suspend_handler = {
+.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
+.suspend = msm_cpu_early_suspend,
+.resume = msm_cpu_late_resume,
+};
+
 static int __cpuinit msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 		unsigned long action, void *hcpu)
 {
@@ -405,6 +467,8 @@ static int __init msm_cpufreq_register(void)
 
 	msm_cpufreq_wq = create_workqueue("msm-cpufreq");
 	register_hotcpu_notifier(&msm_cpufreq_cpu_notifier);
+	
+	register_early_suspend(&msm_cpu_early_suspend_handler);
 
 	return cpufreq_register_driver(&msm_cpufreq_driver);
 }
