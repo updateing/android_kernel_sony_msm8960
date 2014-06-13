@@ -92,6 +92,7 @@ static unsigned int index;
 
 static unsigned int min_online_cpus = 1;
 static unsigned int max_online_cpus;
+static unsigned int allow_suspend_offlining = 1;
 
 static int min_online_cpus_set(const char *arg, const struct kernel_param *kp)
 {
@@ -124,12 +125,29 @@ static int max_online_cpus_set(const char *arg, const struct kernel_param *kp)
     return ret;
 }
 
+static int allow_suspend_offlining_set(const char *arg, const struct kernel_param *kp)
+{
+    int ret;
+    
+    ret = param_set_int(arg, kp);
+    
+    if ((allow_suspend_offlining != 0) && (allow_suspend_offlining != 1))
+        allow_suspend_offlining = 1;
+    
+    return ret;
+}
+
 static int min_online_cpus_get(char *buffer, const struct kernel_param *kp)
 {
     return param_get_int(buffer, kp);
 }
 
 static int max_online_cpus_get(char *buffer, const struct kernel_param *kp)
+{
+    return param_get_int(buffer, kp);
+}
+
+static int allow_suspend_offlining_get(char *buffer, const struct kernel_param *kp)
 {
     return param_get_int(buffer, kp);
 }
@@ -146,10 +164,17 @@ static struct kernel_param_ops max_online_cpus_ops =
     .get = max_online_cpus_get,
 };
 
+static struct kernel_param_ops allow_suspend_offlining_ops = 
+{
+    .set = allow_suspend_offlining_set,
+    .get = allow_suspend_offlining_get,
+};
+
 module_param_cb(min_online_cpus, &min_online_cpus_ops, &min_online_cpus, 0755);
 
 module_param_cb(max_online_cpus, &max_online_cpus_ops, &max_online_cpus, 0755);
 
+module_param_cb(allow_suspend_offlining, &allow_suspend_offlining_ops, &allow_suspend_offlining, 0755);
 
 
 static void hotplug_decision_work_fn(struct work_struct *work)
@@ -411,15 +436,21 @@ static void auto_hotplug_early_suspend(struct early_suspend *handler)
 #endif
 	flags |= EARLYSUSPEND_ACTIVE;
 
-	/* Cancel all scheduled delayed work to avoid races */
-	cancel_delayed_work_sync(&hotplug_offline_work);
-	cancel_delayed_work_sync(&hotplug_decision_work);
-	if (num_online_cpus() > 1) {
+    if (allow_suspend_offlining) {
+	    /* Cancel all scheduled delayed work to avoid races */
+	    cancel_delayed_work_sync(&hotplug_offline_work);
+	    cancel_delayed_work_sync(&hotplug_decision_work);
+	    if (num_online_cpus() > 1) {
 #if DEBUG
-		pr_info("auto_hotplug: Offlining CPUs for early suspend\n");
+		    pr_info("auto_hotplug: Offlining CPUs for early suspend\n");
 #endif
-		schedule_work_on(0, &hotplug_offline_all_work);
-	}
+		    schedule_work_on(0, &hotplug_offline_all_work);
+	    }
+#if DEBUG
+    } else {
+        pr_info("auto:hotplug: Cancelled offlining CPUs for early suspend (setting not allowed)\n");
+#endif
+    }
 }
 
 static void auto_hotplug_late_resume(struct early_suspend *handler)
