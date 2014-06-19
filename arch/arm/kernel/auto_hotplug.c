@@ -92,7 +92,7 @@ static unsigned int index;
 
 static unsigned int min_online_cpus = 1;
 static unsigned int max_online_cpus;
-static unsigned int allow_suspend_offlining = 0;
+static unsigned int allow_suspend_offlining = 1;
 
 static int min_online_cpus_set(const char *arg, const struct kernel_param *kp)
 {
