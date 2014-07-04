@@ -93,6 +93,7 @@ static unsigned int index;
 static unsigned int min_online_cpus = 1;
 static unsigned int max_online_cpus;
 static unsigned int allow_suspend_offlining = 1;
+static unsigned int hotplug_disabled = 0;
 
 static int min_online_cpus_set(const char *arg, const struct kernel_param *kp)
 {
@@ -137,6 +138,26 @@ static int allow_suspend_offlining_set(const char *arg, const struct kernel_para
     return ret;
 }
 
+static int hotplug_disabled_set(const char *arg, const struct kernel_param *kp)
+{
+    int ret;
+    void hotplug_disable(bool flag);
+    void hotplug_boostpulse(void);
+
+    ret = param_set_int(arg, kp);
+
+    if (hotplug_disabled) { // When we are to disable it, online all CPUs first.
+        hotplug_boostpulse();
+        allow_suspend_offlining = 0;
+    } else {
+        allow_suspend_offlining = 1;
+    }
+
+    hotplug_disable(hotplug_disabled);
+
+    return ret;
+}
+
 static int min_online_cpus_get(char *buffer, const struct kernel_param *kp)
 {
     return param_get_int(buffer, kp);
@@ -152,22 +173,33 @@ static int allow_suspend_offlining_get(char *buffer, const struct kernel_param *
     return param_get_int(buffer, kp);
 }
 
+static int hotplug_disabled_get(char *buffer, const struct kernel_param *kp)
+{
+    return param_get_int(buffer, kp);
+}
+
 static struct kernel_param_ops min_online_cpus_ops =
 {
     .set = min_online_cpus_set,
     .get = min_online_cpus_get,
 };
 
-static struct kernel_param_ops max_online_cpus_ops = 
+static struct kernel_param_ops max_online_cpus_ops =
 {
     .set = max_online_cpus_set,
     .get = max_online_cpus_get,
 };
 
-static struct kernel_param_ops allow_suspend_offlining_ops = 
+static struct kernel_param_ops allow_suspend_offlining_ops =
 {
     .set = allow_suspend_offlining_set,
     .get = allow_suspend_offlining_get,
+};
+
+static struct kernel_param_ops hotplug_disabled_ops =
+{
+    .set = hotplug_disabled_set,
+    .get = hotplug_disabled_get,
 };
 
 module_param_cb(min_online_cpus, &min_online_cpus_ops, &min_online_cpus, 0755);
@@ -175,6 +207,8 @@ module_param_cb(min_online_cpus, &min_online_cpus_ops, &min_online_cpus, 0755);
 module_param_cb(max_online_cpus, &max_online_cpus_ops, &max_online_cpus, 0755);
 
 module_param_cb(allow_suspend_offlining, &allow_suspend_offlining_ops, &allow_suspend_offlining, 0755);
+
+module_param_cb(hotplug_disabled, &hotplug_disabled_ops, &hotplug_disabled, 0755);
 
 
 static void hotplug_decision_work_fn(struct work_struct *work)
@@ -448,7 +482,7 @@ static void auto_hotplug_early_suspend(struct early_suspend *handler)
 	    }
 #if DEBUG
     } else {
-        pr_info("auto:hotplug: Cancelled offlining CPUs for early suspend (setting not allowed)\n");
+        pr_info("auto_hotplug: Cancelled offlining CPUs for early suspend (disallowed by param)\n");
 #endif
     }
 }
@@ -458,9 +492,17 @@ static void auto_hotplug_late_resume(struct early_suspend *handler)
 #if DEBUG
 	pr_info("auto_hotplug: late resume handler\n");
 #endif
+
+    if (!(flags & HOTPLUG_DISABLED)) {
 	flags &= ~EARLYSUSPEND_ACTIVE;
 
 	schedule_work(&hotplug_online_all_work);
+    }
+#if DEBUG
+        else {
+            pr_info("auto_hotplug: late resume: hotplug was disabled.\n");
+    }
+#endif
 }
 
 static struct early_suspend auto_hotplug_suspend = {
